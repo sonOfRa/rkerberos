@@ -18,6 +18,7 @@ void Init_principal();
 void Init_keytab();
 void Init_keytab_entry();
 void Init_ccache();
+void Init_creds();
 
 // Defined in rkerberos.c
 VALUE rb_hash_aref2(VALUE, const char*);
@@ -35,6 +36,7 @@ extern VALUE cKadm5;
 extern VALUE cKadm5Config;
 extern VALUE cKadm5Exception;
 extern VALUE cKadm5Policy;
+extern VALUE cKadm5Credentials;
 
 // Kerberos::Krb5
 typedef struct {
@@ -93,4 +95,10 @@ typedef struct {
   krb5_context ctx;
   kadm5_policy_ent_rec policy;
 } RUBY_KADM5_POLICY;
+
+typedef struct {
+  krb5_context ctx;
+  krb5_creds *creds;
+} RUBY_KRB5_CREDS;
+
 #endif

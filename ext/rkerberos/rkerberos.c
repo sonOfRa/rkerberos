@@ -1,4 +1,6 @@
+#include <stdbool.h>
 #include <rkerberos.h>
+#include <creds.h>
 
 VALUE mKerberos;
 VALUE cKrb5;
@@ -326,18 +328,21 @@ static VALUE rkrb5_change_password(VALUE self, VALUE v_old, VALUE v_new){
 
 /*
  * call-seq:
- *   krb5.get_init_creds_password(user, password, service = nil)
+ *   krb5.get_init_creds_password(user, password, service = nil, getcreds = false)
  *
  * Authenticates the credentials of +user+ using +password+ against +service+,
  * and has the effect of setting the principal and context internally. This method
  * must typically be called before using other methods.
+ *
+ * Optionally returns the credentials acquired if +getcreds+ is set to true
  */
 static VALUE rkrb5_get_init_creds_passwd(int argc, VALUE* argv, VALUE self){
   RUBY_KRB5* ptr;
-  VALUE v_user, v_pass, v_service;
+  VALUE v_user, v_pass, v_service, v_getcreds;
   char* user;
   char* pass;
   char* service;
+  bool getcreds;
   krb5_error_code kerror;
 
   Data_Get_Struct(self, RUBY_KRB5, ptr); 
@@ -345,7 +350,7 @@ static VALUE rkrb5_get_init_creds_passwd(int argc, VALUE* argv, VALUE self){
   if(!ptr->ctx)
     rb_raise(cKrb5Exception, "no context has been established");
 
-  rb_scan_args(argc, argv, "21", &v_user, &v_pass, &v_service);
+  rb_scan_args(argc, argv, "22", &v_user, &v_pass, &v_service, &v_getcreds);
 
   Check_Type(v_user, T_STRING);
   Check_Type(v_pass, T_STRING);
@@ -359,6 +364,8 @@ static VALUE rkrb5_get_init_creds_passwd(int argc, VALUE* argv, VALUE self){
     Check_Type(v_service, T_STRING);
     service = StringValueCStr(v_service);
   }
+
+  getcreds = RTEST(v_getcreds);
 
   kerror = krb5_parse_name(ptr->ctx, user, &ptr->princ); 
 
@@ -380,6 +387,8 @@ static VALUE rkrb5_get_init_creds_passwd(int argc, VALUE* argv, VALUE self){
   if(kerror)
     rb_raise(cKrb5Exception, "krb5_get_init_creds_password: %s", error_message(kerror));
 
+  if(getcreds)
+    return rkrb5_creds_create(&ptr->creds);
   return Qtrue;
 }
 
@@ -610,4 +619,5 @@ void Init_rkerberos(){
   Init_principal();
   Init_keytab();
   Init_keytab_entry();
+  Init_creds();
 }

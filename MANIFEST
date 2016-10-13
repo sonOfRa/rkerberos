@@ -5,6 +5,8 @@ Rakefile
 README
 ext/ccache.c
 ext/context.c
+ext/creds.c
+ext/creds.h
 ext/extconf.rb
 ext/kadm5.c
 ext/keytab.c

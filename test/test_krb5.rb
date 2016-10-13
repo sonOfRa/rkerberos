@@ -4,6 +4,13 @@
 # Test suite for the Kerberos::Krb5 class. At the moment, this suite
 # requires that you export "testuser1" to a local keytab file called
 # "test.keytab" in the "test" directory for certain tests to pass.
+#
+# Some tests also require that you have an entry in your .dbrc file for
+# 'local-kerberos' with includes a valid principal and password and
+# optional $KRB5_CONFIG file, as well as an 'invalid-user-kerberos' entry
+# with an invalid user and an 'invalid-pass-kerberos' entry with a valid
+# user but an invalid password. The respective tests are skipped if the
+# entries are not found.
 ########################################################################
 require 'rubygems'
 gem 'test-unit'
@@ -11,6 +18,7 @@ gem 'test-unit'
 require 'open3'
 require 'test/unit'
 require 'rkerberos'
+require 'dbi/dbrc'
 
 class TC_Krb5 < Test::Unit::TestCase
   def self.startup
@@ -20,7 +28,29 @@ class TC_Krb5 < Test::Unit::TestCase
       @@cache_found = false unless stderr.gets.nil?
     end
 
-    @@krb5_conf = ENV['KRB5_CONFIG'] || '/etc/krb5.conf'
+    begin
+      @@info = DBI::DBRC.new('local-kerberos')
+    rescue DBI::DBRC::Error
+      @@info = nil
+    end
+
+    begin
+      @@invalid_user = DBI::DBRC.new('invalid-user-kerberos')
+    rescue DBI::DBRC::Error
+      @@invalid_user = nil
+    end
+
+    begin
+      @@invalid_pass = DBI::DBRC.new('invalid-pass-kerberos')
+    rescue DBI::DBRC::Error
+      @@invalid_pass = nil
+    end
+
+    if @@info
+      @@krb5_conf = @@info.driver || ENV['KRB5_CONFIG'] || '/etc/krb5.conf'
+    else
+      @@krb5_conf = ENV['KRB5_CONFIG'] || '/etc/krb5.conf'
+    end
     @@realm = IO.read(@@krb5_conf).split("\n").grep(/default_realm/).first.split('=').last.lstrip.chomp
   end
 
@@ -29,6 +59,12 @@ class TC_Krb5 < Test::Unit::TestCase
     @keytab  = Kerberos::Krb5::Keytab.new.default_name.split(':').last
     @user    = "testuser1@" + @@realm
     @service = "kadmin/admin"
+    @realuser = @@info ? @@info.user : nil
+    @realpass = @@info ? @@info.password : nil
+    @invalid_user_user = @@invalid_user ? @@invalid_user.user : nil
+    @invalid_user_pass = @@invalid_user ? @@invalid_user.password : nil
+    @invalid_pass_user = @@invalid_pass ? @@invalid_pass.user : nil
+    @invalid_pass_pass = @@invalid_pass ? @@invalid_pass.password : nil
   end
 
   test "version constant" do
@@ -84,16 +120,36 @@ class TC_Krb5 < Test::Unit::TestCase
     assert_respond_to(@krb5, :get_init_creds_password)
   end
 
-  test "get_init_creds_password requires two or three arguments" do
+  test "get_init_creds_password requires two, three or four arguments" do
     assert_raise(ArgumentError){ @krb5.get_init_creds_password }
     assert_raise(ArgumentError){ @krb5.get_init_creds_password('test') }
-    assert_raise(ArgumentError){ @krb5.get_init_creds_password('test', 'foo', 'bar', 'baz') }
+    assert_raise(ArgumentError){ @krb5.get_init_creds_password('test', 'foo', 'bar', 'baz', 'quux') }
   end
 
   test "get_init_creds_password requires string arguments" do
     assert_raise(TypeError){ @krb5.get_init_creds_password(1, 2) }
     assert_raise(TypeError){ @krb5.get_init_creds_password('test', 1) }
     assert_raise(TypeError){ @krb5.get_init_creds_password('test', 'foo', 1) }
+  end
+
+  test "calling get_init_creds_password with a real user and password returns true" do
+    omit_unless(@@info, "No information for 'local-kerberos' in .dbrc, skipping")
+    assert_true(@krb5.get_init_creds_password(@realuser, @realpass))
+  end
+
+  test "calling get_init_creds_password with a real user and password and getcreds returns a creds object" do
+    omit_unless(@@info, "No information for 'local-kerberos' in .dbrc, skipping")
+    assert_instance_of(Kerberos::Krb5::Creds, @krb5.get_init_creds_password(@realuser, @realpass, nil, true))
+  end
+
+  test "calling get_init_creds_password with an invalid user raises an error" do
+    omit_unless(@@invalid_user, "No information for 'invalid-user-kerberos' in .dbrc, skipping")
+    assert_raise(Kerberos::Krb5::Exception){ @krb5.get_init_creds_password(@invalid_user_user, @invalid_user_pass) }
+  end
+
+  test "calling get_init_creds_password with an invalid password raises an error" do
+    omit_unless(@@invalid_pass, "No information for 'invalid-pass-kerberos' in .dbrc, skipping")
+    assert_raise(Kerberos::Krb5::Exception){ @krb5.get_init_creds_password(@invalid_pass_user, @invalid_pass_pass) }
   end
 
   test "calling get_init_creds_password after closing the object raises an error" do

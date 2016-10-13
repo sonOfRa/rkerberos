@@ -1,7 +1,7 @@
 #include <creds.h>
 
 // Create an instance of this class with the specified credentials
-static VALUE rkrb5_creds_create(krb5_creds *increds){
+VALUE rkrb5_creds_create(krb5_creds *increds){
   RUBY_KRB5_CREDS *ptr;
   krb5_error_code kerror;
 
@@ -16,7 +16,7 @@ static VALUE rkrb5_creds_create(krb5_creds *increds){
   return Data_Wrap_Struct(cKrb5Creds, 0, rkrb5_creds_free, ptr);
 }
 
-static void rkrb5_creds_free(RUBY_KRB5_CREDS *ptr){
+void rkrb5_creds_free(RUBY_KRB5_CREDS *ptr){
   if(!ptr){
     return;
   }
@@ -32,6 +32,6 @@ static void rkrb5_creds_free(RUBY_KRB5_CREDS *ptr){
   free(ptr);
 }
 
-void Init_Creds(){
+void Init_creds(){
   cKrb5Creds = rb_define_class_under(cKrb5, "Creds", rb_cObject);
 }

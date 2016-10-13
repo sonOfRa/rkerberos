@@ -4,6 +4,6 @@
 
 VALUE cKrb5Creds;
 
-static void rkrb5_creds_free(RUBY_KRB5_CREDS*);
-static VALUE rkrb5_creds_create(krb5_creds*);
+void rkrb5_creds_free(RUBY_KRB5_CREDS*);
+VALUE rkrb5_creds_create(krb5_creds*);
 #endif

@@ -26,6 +26,25 @@ class TC_Krb5_Context < Test::Unit::TestCase
     assert_nothing_raised{ @context.close }
   end
 
+  test "constructor accepts an optional 'secure' argument" do
+    assert_nothing_raised { Kerberos::Krb5::Context.new }
+    assert_nothing_raised { Kerberos::Krb5::Context.new(true) }
+  end
+
+  test "constructor accepts zero or one arguments" do
+    assert_raise(ArgumentError) { Kerberos::Krb5::Context.new(true, 1) }
+  end
+
+  test "secure attribute is true when passing 'true' to the constructor" do
+    assert_true(Kerberos::Krb5::Context.new(true).secure)
+  end
+
+  test "secure attribute is false when passing 'false', 'nil' or nothing to the constructor" do
+    assert_false(Kerberos::Krb5::Context.new(false).secure)
+    assert_false(Kerberos::Krb5::Context.new(nil).secure)
+    assert_false(Kerberos::Krb5::Context.new.secure)
+  end
+
   def teardown
     @context.close
     @context = nil

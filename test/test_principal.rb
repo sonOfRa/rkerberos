@@ -16,9 +16,18 @@ class TC_Krb5_Principal < Test::Unit::TestCase
     @princ = Kerberos::Krb5::Principal.new(@name)
   end
 
-  test "argument to constructor must be a string" do
+  test "first argument to constructor must be a string" do
     assert_raise(TypeError){ Kerberos::Krb5::Principal.new(1) }
     assert_raise(TypeError){ Kerberos::Krb5::Principal.new(true) }
+  end
+
+  test "constructor takes one or two arguments" do
+    assert_raise(ArgumentError){ Kerberos::Krb5::Principal.new }
+    assert_raise(ArgumentError){ Kerberos::Krb5::Principal.new(@name, Kerberos::Krb5::Context.new, "foo") }
+  end
+
+  test "second argument to constructor must be a Kerberos::Krb5::Context" do
+    assert_raise(TypeError){ Kerberos::Krb5::Principal.new(@name, "foo")}
   end
 
   test "name basic functionality" do
@@ -126,6 +135,42 @@ class TC_Krb5_Principal < Test::Unit::TestCase
   test "equality works as expected" do
     assert_true(@princ == @princ)
     assert_false(@princ == Kerberos::Krb5::Principal.new('other'))
+  end
+
+  test "calling a method on a closed principal raises an error" do
+    @princ.close
+    assert_raise(Kerberos::Krb5::Exception) { @princ.inspect }
+    assert_raise(Kerberos::Krb5::Exception) { @princ.realm }
+    assert_raise(Kerberos::Krb5::Exception) { @princ.realm = "TEST.REALM" }
+    assert_raise(Kerberos::Krb5::Exception) { @princ == @princ }
+    assert_raise(Kerberos::Krb5::Exception) { @princ.context }
+  end
+
+  test "calling a method on a closed principal raises an error with a specific message" do
+    @princ.close
+    assert_raise_message('no context has been established') { @princ.inspect }
+    assert_raise_message('no context has been established') { @princ.realm }
+    assert_raise_message('no context has been established') { @princ.realm = "TEST.REALM" }
+    assert_raise_message('no context has been established') { @princ == @princ }
+    assert_raise_message('no context has been established') { @princ.context }
+  end
+
+  test "passing a closed principal to == raises an error" do
+    @princ.close
+    assert_raise(Kerberos::Krb5::Exception) { Kerberos::Krb5::Principal.new(@name) == @princ }
+  end
+
+  test "passing a closed principal to == raises an error with a specific message" do
+    @princ.close
+    assert_raise_message('no context has been established') { Kerberos::Krb5::Principal.new(@name) == @princ }
+  end
+
+  test "context basic functionality" do
+    assert_respond_to(@princ, :context)
+  end
+
+  test "calling context returns a Kerberos::Krb5::Context object" do
+    assert_kind_of(Kerberos::Krb5::Context, @princ.context)
   end
 
   def teardown

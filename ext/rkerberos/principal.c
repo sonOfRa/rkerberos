@@ -2,16 +2,31 @@
 
 VALUE cKrb5Principal;
 
+void rkrb5_princ_mark(RUBY_KRB5_PRINC* ptr){
+  rb_gc_mark(ptr->context);
+}
+
+VALUE rkrb5_princ_close(VALUE self){
+  RUBY_KRB5_PRINC* ptr;
+
+  Data_Get_Struct(self, RUBY_KRB5_PRINC, ptr);
+
+  if(ptr->ctx && ptr->principal){
+    krb5_free_principal(ptr->ctx, ptr->principal);
+  }
+
+  ptr->ctx = NULL;
+
+  return Qtrue;
+}
 // Free function for the Kerberos::Krb5::Keytab class.
 static void rkrb5_princ_free(RUBY_KRB5_PRINC* ptr){
   if(!ptr)
     return;
 
-  if(ptr->principal)
+  if(ptr->ctx && ptr->principal){
     krb5_free_principal(ptr->ctx, ptr->principal);
-
-  if(ptr->ctx)
-    krb5_free_context(ptr->ctx);
+  }
 
   free(ptr);
 }
@@ -20,7 +35,7 @@ static void rkrb5_princ_free(RUBY_KRB5_PRINC* ptr){
 static VALUE rkrb5_princ_allocate(VALUE klass){
   RUBY_KRB5_PRINC* ptr = malloc(sizeof(RUBY_KRB5_PRINC));
   memset(ptr, 0, sizeof(RUBY_KRB5_PRINC));
-  return Data_Wrap_Struct(klass, 0, rkrb5_princ_free, ptr);
+  return Data_Wrap_Struct(klass, rkrb5_princ_mark, rkrb5_princ_free, ptr);
 }
 
 /*
@@ -38,31 +53,39 @@ static VALUE rkrb5_princ_allocate(VALUE klass){
  *     pr.expire_time = Time.now + 20000
  *   end
  */
-static VALUE rkrb5_princ_initialize(VALUE self, VALUE v_name){
+static VALUE rkrb5_princ_initialize(int argc, VALUE* argv, VALUE self){
   RUBY_KRB5_PRINC* ptr;
+  RUBY_KRB5_CONTEXT* ctxptr;
   krb5_error_code kerror;
+  VALUE v_name, v_context;
+  char* name;
 
   Data_Get_Struct(self, RUBY_KRB5_PRINC, ptr); 
+  rb_scan_args(argc, argv, "11", &v_name, &v_context);
 
-  kerror = krb5_init_context(&ptr->ctx);
-
-  if(kerror)
-    rb_raise(cKrb5Exception, "krb5_init_context failed: %s", error_message(kerror));
-
-  if(NIL_P(v_name)){
-    rb_iv_set(self, "@principal", Qnil);
+  if(NIL_P(v_context)){
+    v_context = rb_class_new_instance(0, NULL, cKrb5Context);
   }
   else{
-    char* name;
-    Check_Type(v_name, T_STRING);
-    name = StringValueCStr(v_name);
-    kerror = krb5_parse_name(ptr->ctx, name, &ptr->principal);
-
-    if(kerror)
-      rb_raise(cKrb5Exception, "krb5_parse_name failed: %s", error_message(kerror));
-
-    rb_iv_set(self, "@principal", v_name);
+    if(CLASS_OF(v_context) != cKrb5Context){
+      rb_raise(rb_eTypeError, "wrong argument type %s (expected Kerberos::Krb5::Context)",
+        rb_obj_classname(v_context));
+    }
   }
+
+  Data_Get_Struct(v_context, RUBY_KRB5_CONTEXT, ctxptr);
+  ptr->ctx = ctxptr->ctx;
+  ptr->context = v_context;
+
+  Check_Type(v_name, T_STRING);
+  name = StringValueCStr(v_name);
+  kerror = krb5_parse_name(ptr->ctx, name, &ptr->principal);
+
+  if(kerror){
+    rb_raise(cKrb5Exception, "krb5_parse_name failed: %s", error_message(kerror));
+  }
+
+  rb_iv_set(self, "@principal", v_name);
 
   rb_iv_set(self, "@attributes", Qnil);
   rb_iv_set(self, "@aux_attributes", Qnil);
@@ -79,8 +102,10 @@ static VALUE rkrb5_princ_initialize(VALUE self, VALUE v_name){
   rb_iv_set(self, "@policy", Qnil);
   rb_iv_set(self, "@kvno", Qnil);
 
-  if(rb_block_given_p())
-    rb_yield(self);
+  if(rb_block_given_p()){
+    rb_ensure(rb_yield, self, rkrb5_princ_close, self);
+    return Qnil;
+  }
 
   return self;
 }
@@ -94,6 +119,10 @@ static VALUE rkrb5_princ_initialize(VALUE self, VALUE v_name){
 static VALUE rkrb5_princ_get_realm(VALUE self){
   RUBY_KRB5_PRINC* ptr;
   Data_Get_Struct(self, RUBY_KRB5_PRINC, ptr); 
+
+  if(!ptr->ctx){
+    rb_raise(cKrb5Exception, "no context has been established");
+  }
 
   return rb_str_new2(krb5_princ_realm(ptr->ctx, ptr->principal)->data);
 }
@@ -110,6 +139,10 @@ static VALUE rkrb5_princ_set_realm(VALUE self, VALUE v_realm){
   Data_Get_Struct(self, RUBY_KRB5_PRINC, ptr); 
 
   Check_Type(v_realm, T_STRING);
+
+  if(!ptr->ctx){
+    rb_raise(cKrb5Exception, "no context has been established");
+  }
 
   krb5_set_principal_realm(ptr->ctx, ptr->principal, StringValueCStr(v_realm));
 
@@ -130,6 +163,10 @@ static VALUE rkrb5_princ_equal(VALUE self, VALUE v_other){
   Data_Get_Struct(self, RUBY_KRB5_PRINC, ptr1); 
   Data_Get_Struct(v_other, RUBY_KRB5_PRINC, ptr2); 
 
+  if(!ptr1->ctx || !ptr2->ctx){
+    rb_raise(cKrb5Exception, "no context has been established");
+  }
+
   if(krb5_principal_compare(ptr1->ctx, ptr1->principal, ptr2->principal))
     v_bool = Qtrue;
 
@@ -144,6 +181,13 @@ static VALUE rkrb5_princ_equal(VALUE self, VALUE v_other){
  */
 static VALUE rkrb5_princ_inspect(VALUE self){
   VALUE v_str;
+  RUBY_KRB5_PRINC* ptr;
+
+  Data_Get_Struct(self, RUBY_KRB5_PRINC, ptr);
+
+  if(!ptr->ctx){
+    rb_raise(cKrb5Exception, "no context has been established");
+  }
 
   v_str = rb_str_new2("#<");
   rb_str_buf_cat2(v_str, rb_obj_classname(self));
@@ -214,6 +258,17 @@ static VALUE rkrb5_princ_inspect(VALUE self){
   return v_str;
 }
 
+VALUE rkrb5_princ_get_context(VALUE self){
+  RUBY_KRB5_PRINC* ptr;
+
+  Data_Get_Struct(self, RUBY_KRB5_PRINC, ptr);
+
+  if(!ptr->ctx){
+    rb_raise(cKrb5Exception, "no context has been established");
+  }
+  return ptr->context;
+}
+
 void Init_principal(){
   /* The Kerberos::Krb5::Principal class encapsulates a Kerberos principal. */
   cKrb5Principal = rb_define_class_under(cKrb5, "Principal", rb_cObject);
@@ -224,7 +279,7 @@ void Init_principal(){
 
   // Constructor
 
-  rb_define_method(cKrb5Principal, "initialize", rkrb5_princ_initialize, 1);
+  rb_define_method(cKrb5Principal, "initialize", rkrb5_princ_initialize, -1);
 
   // Instance Methods
 
@@ -232,6 +287,8 @@ void Init_principal(){
   rb_define_method(cKrb5Principal, "realm", rkrb5_princ_get_realm, 0);
   rb_define_method(cKrb5Principal, "realm=", rkrb5_princ_set_realm, 1);
   rb_define_method(cKrb5Principal, "==", rkrb5_princ_equal, 1);
+  rb_define_method(cKrb5Principal, "context", rkrb5_princ_get_context, 0);
+  rb_define_method(cKrb5Principal, "close", rkrb5_princ_close, 0);
 
   // Attributes
 

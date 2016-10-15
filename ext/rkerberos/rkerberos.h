@@ -75,6 +75,7 @@ typedef struct {
 
 typedef struct {
   krb5_context ctx;
+  VALUE context;
   krb5_principal principal;
 } RUBY_KRB5_PRINC;
 

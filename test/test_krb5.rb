@@ -210,6 +210,14 @@ class TC_Krb5 < Test::Unit::TestCase
     assert_true(hash.values.first.size > 0)
   end
 
+  test "context basic functionality" do
+    assert_respond_to(@krb5, :context)
+  end
+
+  test "context returns a Kerberos::Krb5::Context object" do
+    assert_kind_of(Kerberos::Krb5::Context, @krb5.context)
+  end
+
   def teardown
     @krb5.close
     @krb5 = nil

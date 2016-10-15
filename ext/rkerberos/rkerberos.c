@@ -76,6 +76,7 @@ static VALUE rkrb5_initialize(int argc, VALUE* argv, VALUE self){
 
   Data_Get_Struct(v_context, RUBY_KRB5_CONTEXT, ctxptr);
   ptr->ctx = ctxptr->ctx;
+  ptr->context = v_context;
 
   if(rb_block_given_p()){
     rb_ensure(rb_yield, self, rkrb5_close, self);
@@ -521,6 +522,16 @@ static VALUE rkrb5_get_permitted_enctypes(VALUE self){
   return v_enctypes;
 }
 
+static VALUE rkrb5_get_context(VALUE self){
+  RUBY_KRB5* ptr;
+
+  Data_Get_Struct(self, RUBY_KRB5, ptr);
+
+  if(!ptr->ctx){
+    rb_raise(cKrb5Exception, "no context has been established");
+  }
+  return ptr->context;
+}
 void Init_rkerberos(){
   mKerberos      = rb_define_module("Kerberos");
   cKrb5          = rb_define_class_under(mKerberos, "Krb5", rb_cObject);
@@ -541,6 +552,7 @@ void Init_rkerberos(){
   rb_define_method(cKrb5, "get_default_principal", rkrb5_get_default_principal, 0);
   rb_define_method(cKrb5, "get_permitted_enctypes", rkrb5_get_permitted_enctypes, 0);
   rb_define_method(cKrb5, "set_default_realm", rkrb5_set_default_realm, -1);
+  rb_define_method(cKrb5, "context", rkrb5_get_context, 0);
 
   // Aliases
   rb_define_alias(cKrb5, "default_realm", "get_default_realm");

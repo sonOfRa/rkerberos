@@ -39,6 +39,7 @@ extern VALUE cKadm5Policy;
 // Kerberos::Krb5
 typedef struct {
   krb5_context ctx;
+  VALUE context;
   krb5_creds creds;
   krb5_principal princ;
   krb5_keytab keytab;
@@ -47,7 +48,6 @@ typedef struct {
 // Kerberos::Context
 typedef struct {
   krb5_context ctx;
-  krb5_enctype etypes;
 } RUBY_KRB5_CONTEXT;
 
 // Kerberos::Kadm5

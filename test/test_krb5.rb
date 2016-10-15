@@ -40,6 +40,15 @@ class TC_Krb5 < Test::Unit::TestCase
     Kerberos::Krb5.new{ |krb5| assert_kind_of(Kerberos::Krb5, krb5) }
   end
 
+  test "constructor accepts one or zero arguments" do
+    assert_nothing_raised { Kerberos::Krb5.new }
+    assert_nothing_raised { Kerberos::Krb5.new(Kerberos::Krb5::Context.new) }
+  end
+
+  test "constructor only accepts an argument of type Kerberos::Krb5::Context" do
+    assert_raise(TypeError) { Kerberos::Krb5.new("foobar") }
+  end
+
   test "get_default_realm basic functionality" do
     assert_respond_to(@krb5, :get_default_realm)
     assert_nothing_raised{ @krb5.get_default_realm }

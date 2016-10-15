@@ -42,7 +42,7 @@ static VALUE rkrb5_context_close(VALUE self){
 
 /*
  * call-seq:
- *   Kerberos::Context.(secure=false)
+ *   Kerberos::Context.new(secure=false)
  *
  * Creates and returns a new Kerberos::Context object.
  *
